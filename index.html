@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FormFlow — 分岐フォーム設計図</title>
+<style>
+  :root{
+    --ink:#15243b;
+    --ink-soft:#4a5a75;
+    --line:#ccd6e6;
+    --paper:#eef2f8;
+    --grid:#d5deec;
+    --card:#ffffff;
+    --indigo:#4f46e5;
+    --indigo-soft:#eef0fe;
+    --branch:#ef6c2b;      /* 分岐線 */
+    --flow:#8ea2be;        /* 通常フロー線 */
+    --submit:#0f9d70;
+    --danger:#e2536b;
+    --warn:#d97706;
+    --shadow:0 6px 22px rgba(31,45,72,.13);
+    --shadow-sm:0 2px 8px rgba(31,45,72,.10);
+    --fnt: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    font-family:var(--fnt);
+    color:var(--ink);
+    background:var(--paper);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    position:fixed;top:0;left:0;right:0;height:56px;z-index:40;
+    background:rgba(255,255,255,.92);
+    backdrop-filter:saturate(1.4) blur(8px);
+    border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:10px;padding:0 14px;
+  }
+  .brand{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:.02em;white-space:nowrap;}
+  .brand .mark{
+    width:26px;height:26px;border-radius:8px;
+    background:linear-gradient(135deg,var(--indigo),#7c73ff);
+    display:grid;place-items:center;color:#fff;font-size:15px;box-shadow:var(--shadow-sm);
+  }
+  .brand small{font-weight:600;color:var(--ink-soft);font-size:11px;letter-spacing:.06em;}
+  .titlefield{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1;max-width:380px;}
+  .titlefield input{
+    border:none;background:transparent;font-family:var(--fnt);color:var(--ink);
+    font-size:15px;font-weight:700;padding:3px 6px;border-radius:7px;
+  }
+  .titlefield input.desc{font-size:12px;font-weight:500;color:var(--ink-soft);}
+  .titlefield input:hover{background:#f2f5fb;}
+  .titlefield input:focus{outline:2px solid var(--indigo-soft);background:#fff;}
+  .spacer{flex:1;}
+  .btn{
+    font-family:var(--fnt);font-size:13px;font-weight:700;cursor:pointer;
+    border-radius:9px;padding:8px 12px;border:1px solid var(--line);
+    background:#fff;color:var(--ink);display:inline-flex;align-items:center;gap:6px;
+    transition:transform .06s ease, box-shadow .15s ease, background .15s;white-space:nowrap;
+  }
+  .btn:hover{box-shadow:var(--shadow-sm);}
+  .btn:active{transform:translateY(1px);}
+  .btn.primary{background:var(--indigo);border-color:var(--indigo);color:#fff;}
+  .btn.primary:hover{box-shadow:0 4px 16px rgba(79,70,229,.4);}
+  .btn.ghost{background:transparent;}
+  .btn.icon{padding:8px;}
+  .btn:disabled{opacity:.35;cursor:default;box-shadow:none;}
+  .btn svg{width:15px;height:15px;flex:none;}
+  .tb-sep{width:1px;height:24px;background:var(--line);margin:0 2px;flex:none;}
+
+  /* ---------- Canvas ---------- */
+  .canvas{
+    position:fixed;inset:56px 0 0 0;overflow:auto;cursor:default;
+    background:
+      radial-gradient(circle at center, var(--grid) 1.4px, transparent 1.5px);
+    background-size:26px 26px;
+  }
+  .canvas.panning{cursor:grabbing;user-select:none;}
+  .content{position:relative;width:4200px;height:3000px;transform-origin:0 0;}
+  svg.wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible;}
+  svg.wires .wire{transition:opacity .15s;}
+  svg.wires.focused .wire{opacity:.12;}
+  svg.wires.focused .wire.hot{opacity:1;}
+  .wire-label{font-family:var(--fnt);font-size:10px;font-weight:700;fill:#fff;}
+
+  /* ---------- Node ---------- */
+  .node{
+    position:absolute;width:272px;background:var(--card);z-index:2;
+    border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;
+    transition:box-shadow .18s;
+  }
+  .node:hover{box-shadow:0 10px 30px rgba(31,45,72,.20);}
+  .node.start{border-color:#c8ccff;}
+  .node .head{
+    padding:9px 11px;border-radius:13px 13px 0 0;cursor:grab;
+    background:linear-gradient(135deg,#f5f6ff,#eef0ff);
+    border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:7px;user-select:none;
+  }
+  .node.start .head{background:linear-gradient(135deg,var(--indigo),#6a63f2);}
+  .node.start .head .sec-no,.node.start .head .sec-title-in{color:#fff;}
+  .node .head:active{cursor:grabbing;}
+  .sec-no{
+    font-size:10px;font-weight:800;letter-spacing:.05em;color:var(--indigo);
+    background:#fff;border-radius:6px;padding:2px 6px;white-space:nowrap;
+    box-shadow:var(--shadow-sm);
+  }
+  .node.start .sec-no{background:rgba(255,255,255,.22);}
+  .sec-title-in{
+    flex:1;min-width:0;border:none;background:transparent;font-family:var(--fnt);
+    font-weight:700;font-size:13px;color:var(--ink);padding:2px 3px;border-radius:5px;
+  }
+  .sec-title-in:focus{outline:none;background:rgba(255,255,255,.85);}
+  .node.start .sec-title-in::placeholder{color:rgba(255,255,255,.7);}
+  .node .head .hbtn{
+    border:none;background:transparent;cursor:pointer;color:var(--ink-soft);flex:none;
+    width:22px;height:22px;border-radius:6px;font-size:13px;line-height:1;display:grid;place-items:center;
+  }
+  .node.start .head .hbtn{color:rgba(255,255,255,.85);}
+  .node .head .hbtn:hover{background:rgba(0,0,0,.08);}
+  .node .head .hbtn.del:hover{color:var(--danger);}
+  .warnb{
+    flex:none;width:20px;height:20px;border-radius:6px;display:grid;place-items:center;
+    background:#fef3e2;color:var(--warn);font-size:12px;cursor:help;
+  }
+  .node.start .warnb{background:rgba(255,255,255,.9);}
+
+  .node .body{padding:9px 11px 11px;display:flex;flex-direction:column;gap:8px;}
+  .sec-desc{
+    width:100%;border:1px dashed transparent;background:transparent;resize:none;
+    font-family:var(--fnt);font-size:11.5px;color:var(--ink-soft);padding:2px 4px;border-radius:6px;
+    line-height:1.4;
+  }
+  .sec-desc:hover{border-color:var(--line);}
+  .sec-desc:focus{outline:none;border-color:var(--indigo);border-style:solid;background:#fbfcff;}
+
+  .q{
+    border:1px solid var(--line);border-radius:10px;padding:8px;background:#fbfcfe;
+    display:flex;flex-direction:column;gap:6px;position:relative;
+  }
+  .q .q-top{display:flex;align-items:center;gap:6px;}
+  .q .q-title{
+    flex:1;border:1px solid transparent;background:transparent;font-family:var(--fnt);
+    font-size:12.5px;font-weight:600;color:var(--ink);padding:4px 5px;border-radius:6px;min-width:0;
+  }
+  .q .q-title:hover{background:#eef2f8;}
+  .q .q-title:focus{outline:none;background:#fff;border-color:var(--indigo);}
+  .q select.q-type{
+    font-family:var(--fnt);font-size:10.5px;font-weight:700;color:var(--ink-soft);
+    border:1px solid var(--line);border-radius:6px;padding:3px 4px;background:#fff;cursor:pointer;
+  }
+  .q .q-del{
+    border:none;background:transparent;cursor:pointer;color:var(--line);
+    width:20px;height:20px;border-radius:5px;font-size:14px;display:grid;place-items:center;flex:none;
+  }
+  .q .q-del:hover{color:var(--danger);background:#fdeef1;}
+  .q .q-move{
+    position:absolute;right:-9px;top:50%;transform:translateY(-50%);
+    display:none;flex-direction:column;gap:2px;z-index:3;
+  }
+  .q:hover .q-move{display:flex;}
+  .q .q-move button{
+    border:1px solid var(--line);background:#fff;color:var(--ink-soft);cursor:pointer;
+    width:18px;height:16px;border-radius:5px;font-size:8px;line-height:1;display:grid;place-items:center;
+    box-shadow:var(--shadow-sm);padding:0;
+  }
+  .q .q-move button:hover{color:var(--indigo);border-color:var(--indigo);}
+
+  .opt{display:flex;align-items:center;gap:6px;}
+  .opt .dot{width:11px;height:11px;border-radius:50%;border:2px solid var(--flow);flex:none;}
+  .q[data-type="dropdown"] .opt .dot{border-radius:3px;}
+  .opt input{
+    flex:1;border:1px solid transparent;background:transparent;font-family:var(--fnt);
+    font-size:12px;color:var(--ink);padding:3px 4px;border-radius:5px;min-width:0;
+  }
+  .opt input:hover{background:#eef2f8;}
+  .opt input:focus{outline:none;background:#fff;border-color:var(--indigo);}
+  .opt select.goto{
+    font-family:var(--fnt);font-size:10px;font-weight:700;border-radius:6px;
+    border:1px solid var(--line);padding:3px 4px;max-width:96px;cursor:pointer;background:#fff;color:var(--ink-soft);
+  }
+  .opt select.goto.on{border-color:var(--branch);color:var(--branch);background:#fff6f1;}
+  .opt .opt-del{
+    border:none;background:transparent;cursor:pointer;color:var(--line);width:18px;height:18px;
+    border-radius:4px;font-size:13px;display:grid;place-items:center;flex:none;
+  }
+  .opt .opt-del:hover{color:var(--danger);}
+  .add-opt{
+    align-self:flex-start;border:none;background:transparent;color:var(--indigo);
+    font-family:var(--fnt);font-size:11px;font-weight:700;cursor:pointer;padding:2px 4px;border-radius:5px;
+  }
+  .add-opt:hover{background:var(--indigo-soft);}
+
+  .scale-row{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-soft);flex-wrap:wrap;}
+  .scale-row select{
+    font-family:var(--fnt);font-size:11px;font-weight:700;border:1px solid var(--line);
+    border-radius:6px;padding:2px 3px;background:#fff;cursor:pointer;color:var(--ink);
+  }
+  .scale-row input{
+    flex:1;min-width:60px;border:1px solid transparent;background:#eef2f8;font-family:var(--fnt);
+    font-size:11px;color:var(--ink);padding:3px 5px;border-radius:5px;
+  }
+  .scale-row input:focus{outline:none;background:#fff;border-color:var(--indigo);}
+
+  .req{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ink-soft);cursor:pointer;user-select:none;margin-left:auto;white-space:nowrap;}
+  .req input{accent-color:var(--indigo);cursor:pointer;}
+
+  .addq{
+    border:1px dashed var(--line);border-radius:10px;padding:7px;background:transparent;
+    font-family:var(--fnt);font-size:12px;font-weight:700;color:var(--ink-soft);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+  }
+  .addq:hover{border-color:var(--indigo);color:var(--indigo);background:var(--indigo-soft);}
+
+  .foot{
+    border-top:1px solid var(--line);padding:8px 11px;display:flex;align-items:center;gap:7px;
+    font-size:11px;color:var(--ink-soft);border-radius:0 0 13px 13px;background:#fafbfe;
+  }
+  .foot select{
+    flex:1;font-family:var(--fnt);font-size:11px;font-weight:600;border:1px solid var(--line);
+    border-radius:7px;padding:5px 6px;background:#fff;cursor:pointer;color:var(--ink);
+  }
+  .foot select.submit{border-color:var(--submit);color:var(--submit);background:#effaf5;}
+  .foot select.jump{border-color:var(--flow);color:#5a7192;background:#f3f7fc;}
+
+  /* Add-section floating button */
+  .addsec{
+    position:fixed;right:22px;bottom:22px;z-index:30;
+    background:var(--indigo);color:#fff;border:none;border-radius:14px;
+    padding:13px 18px;font-family:var(--fnt);font-size:14px;font-weight:800;cursor:pointer;
+    box-shadow:0 8px 24px rgba(79,70,229,.42);display:flex;align-items:center;gap:8px;
+  }
+  .addsec:active{transform:translateY(1px);}
+
+  .zoomctl{
+    position:fixed;right:22px;bottom:86px;z-index:30;display:flex;align-items:center;
+    background:#fff;border:1px solid var(--line);border-radius:11px;box-shadow:var(--shadow-sm);overflow:hidden;
+  }
+  .zoomctl button{
+    border:none;background:transparent;cursor:pointer;font-family:var(--fnt);color:var(--ink-soft);
+    font-size:15px;font-weight:700;width:34px;height:34px;display:grid;place-items:center;
+  }
+  .zoomctl button:hover{background:#f2f5fb;color:var(--ink);}
+  .zoomctl .pct{width:52px;font-size:11.5px;}
+
+  .hint{
+    position:fixed;left:16px;bottom:16px;z-index:20;font-size:11px;color:var(--ink-soft);
+    background:rgba(255,255,255,.85);border:1px solid var(--line);border-radius:9px;padding:6px 10px;
+    display:flex;gap:12px;align-items:center;backdrop-filter:blur(4px);flex-wrap:wrap;max-width:calc(100vw - 260px);
+  }
+  .hint b{color:var(--ink);}
+  .legend{display:flex;gap:10px;}
+  .legend span{display:flex;align-items:center;gap:4px;}
+  .legend i{width:16px;height:3px;border-radius:2px;display:inline-block;}
+
+  /* ---------- Code drawer ---------- */
+  .drawer{
+    position:fixed;top:0;right:0;bottom:0;width:min(580px,94vw);z-index:60;
+    background:#0f1526;color:#e6ecf7;transform:translateX(101%);transition:transform .28s cubic-bezier(.4,0,.2,1);
+    display:flex;flex-direction:column;box-shadow:-12px 0 40px rgba(0,0,0,.3);
+  }
+  .drawer.open{transform:translateX(0);}
+  .drawer .dhead{
+    padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #26304a;
+  }
+  .drawer .dhead h3{margin:0;font-size:15px;font-weight:800;flex:1;}
+  .drawer .dhead .step{font-size:11px;color:#95a3c2;}
+  .drawer .dclose{background:transparent;border:none;color:#95a3c2;font-size:20px;cursor:pointer;}
+  .drawer .dstats{
+    padding:8px 16px;border-bottom:1px solid #26304a;font-size:11.5px;color:#95a3c2;
+    display:flex;gap:14px;
+  }
+  .drawer .dstats b{color:#e6ecf7;}
+  .drawer pre{
+    flex:1;overflow:auto;margin:0;padding:16px;font-size:12px;line-height:1.55;
+    font-family:"SFMono-Regular",Menlo,Consolas,monospace;white-space:pre;tab-size:2;
+  }
+  .c-com{color:#6a9955;}
+  .c-str{color:#ce9178;}
+  .c-kw{color:#569cd6;}
+  .drawer .dfoot{padding:12px 16px;border-top:1px solid #26304a;display:flex;gap:8px;align-items:center;}
+  .drawer .dfoot .note{font-size:11px;color:#95a3c2;flex:1;line-height:1.5;}
+  .drawer .dfoot .note b{color:#e6ecf7;}
+  .drawer .btn{border-color:#2b3855;background:#1a2236;color:#e6ecf7;}
+  .drawer .btn.primary{background:var(--indigo);border-color:var(--indigo);}
+  .scrim{position:fixed;inset:0;background:rgba(9,13,24,.45);z-index:55;opacity:0;pointer-events:none;transition:opacity .28s;}
+  .scrim.open{opacity:1;pointer-events:auto;}
+
+  /* ---------- Preview modal ---------- */
+  .pv-scrim{position:fixed;inset:0;background:rgba(9,13,24,.5);z-index:65;opacity:0;pointer-events:none;transition:opacity .25s;}
+  .pv-scrim.open{opacity:1;pointer-events:auto;}
+  .pv{
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-46%) scale(.97);z-index:70;
+    width:min(500px,92vw);max-height:84vh;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(9,13,24,.4);
+    display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:all .25s cubic-bezier(.4,0,.2,1);
+    overflow:hidden;
+  }
+  .pv.open{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1);}
+  .pv .pv-head{
+    padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;
+    background:linear-gradient(135deg,#f5f6ff,#eef0ff);
+  }
+  .pv .pv-head h3{margin:0;font-size:14px;font-weight:800;flex:1;}
+  .pv .pv-head .pv-close{border:none;background:transparent;font-size:19px;color:var(--ink-soft);cursor:pointer;}
+  .pv .pv-trail{
+    padding:8px 16px 0;display:flex;gap:5px;flex-wrap:wrap;align-items:center;font-size:10.5px;color:var(--ink-soft);
+  }
+  .pv .pv-trail .tchip{
+    background:var(--indigo-soft);color:var(--indigo);border-radius:6px;padding:2px 7px;font-weight:700;
+    max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .pv .pv-trail .tchip.cur{background:var(--indigo);color:#fff;}
+  .pv .pv-body{padding:14px 18px 6px;overflow:auto;flex:1;}
+  .pv .pv-sec-title{font-size:17px;font-weight:800;margin:0 0 3px;border-top:4px solid var(--indigo);padding-top:10px;}
+  .pv .pv-sec-desc{font-size:12px;color:var(--ink-soft);margin:0 0 12px;line-height:1.5;}
+  .pv .pv-q{border:1px solid var(--line);border-radius:11px;padding:12px 13px;margin-bottom:11px;}
+  .pv .pv-q.invalid{border-color:var(--danger);background:#fef5f6;}
+  .pv .pv-q .pq-title{font-size:13px;font-weight:700;margin:0 0 9px;}
+  .pv .pv-q .pq-title .rq{color:var(--danger);margin-left:2px;}
+  .pv .pv-q label.pv-opt{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 2px;cursor:pointer;}
+  .pv .pv-q label.pv-opt input{accent-color:var(--indigo);width:15px;height:15px;cursor:pointer;}
+  .pv .pv-q .pv-branch-tag{
+    font-size:9.5px;font-weight:800;color:var(--branch);background:#fff6f1;border:1px solid #f7cdb5;
+    border-radius:5px;padding:1px 5px;margin-left:auto;white-space:nowrap;
+  }
+  .pv .pv-q input[type=text],.pv .pv-q textarea,.pv .pv-q select,
+  .pv .pv-q input[type=date],.pv .pv-q input[type=time]{
+    width:100%;font-family:var(--fnt);font-size:13px;border:none;border-bottom:1.5px solid var(--line);
+    padding:6px 2px;background:transparent;resize:vertical;
+  }
+  .pv .pv-q select{border:1px solid var(--line);border-radius:8px;padding:7px;cursor:pointer;}
+  .pv .pv-q input:focus,.pv .pv-q textarea:focus,.pv .pv-q select:focus{outline:none;border-color:var(--indigo);}
+  .pv .pv-scale{display:flex;align-items:flex-end;gap:2px;justify-content:space-between;padding:4px 0;}
+  .pv .pv-scale .sc{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:11.5px;flex:1;}
+  .pv .pv-scale .sc input{accent-color:var(--indigo);cursor:pointer;}
+  .pv .pv-scale .sc-lab{font-size:10.5px;color:var(--ink-soft);max-width:64px;text-align:center;}
+  .pv .pv-done{text-align:center;padding:30px 10px 20px;}
+  .pv .pv-done .big{font-size:44px;margin-bottom:8px;}
+  .pv .pv-done h4{margin:0 0 6px;font-size:16px;}
+  .pv .pv-done p{font-size:12px;color:var(--ink-soft);line-height:1.7;margin:0;}
+  .pv .pv-foot{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;background:#fafbfe;}
+
+  .toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:600;
+    z-index:90;opacity:0;transition:.25s;pointer-events:none;box-shadow:var(--shadow);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .hidden{display:none!important;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="mark">⑃</span>
+    <div>FormFlow <small>／ 分岐フォーム設計図</small></div>
+  </div>
+  <div class="titlefield">
+    <input id="formTitle" data-act="formTitle" placeholder="フォームのタイトル" value="アンケート">
+    <input class="desc" id="formDesc" data-act="formDesc" placeholder="フォームの説明（任意）">
+  </div>
+  <div class="spacer"></div>
+  <button class="btn ghost icon" id="btnUndo" title="元に戻す（Ctrl+Z）">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 016 6v0a6 6 0 01-6 6h-3"/></svg>
+  </button>
+  <button class="btn ghost icon" id="btnRedo" title="やり直し（Ctrl+Y）">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 00-6 6v0a6 6 0 006 6h3"/></svg>
+  </button>
+  <div class="tb-sep"></div>
+  <button class="btn ghost" id="btnNew" title="新しい設計図を作る">新規</button>
+  <button class="btn ghost" id="btnImport" title="設計図(JSON)を読み込む">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+    開く
+  </button>
+  <button class="btn ghost" id="btnExport" title="設計図(JSON)を保存">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 21V9m0 0l-4 4m4-4l4 4M4 7V5a2 2 0 012-2h12a2 2 0 012 2v2"/></svg>
+    保存
+  </button>
+  <div class="tb-sep"></div>
+  <button class="btn ghost" id="btnLayout" title="流れに沿ってセクションを自動配置">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="6" height="6" rx="1.5"/><rect x="15" y="4" width="6" height="6" rx="1.5"/><rect x="15" y="14" width="6" height="6" rx="1.5"/><path d="M9 7h6M9 7c3 0 3 10 6 10"/></svg>
+    整列
+  </button>
+  <button class="btn ghost" id="btnPreview" title="回答の流れを試す">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+    プレビュー
+  </button>
+  <button class="btn primary" id="btnGen">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-3M14 4l6 6M9 15l1-4 9-9 3 3-9 9-4 1z"/></svg>
+    GASを生成
+  </button>
+  <input type="file" id="fileInput" accept="application/json" class="hidden">
+</div>
+
+<div class="canvas" id="canvas">
+  <div class="content" id="content">
+    <svg class="wires" id="wires"></svg>
+    <div id="nodes"></div>
+  </div>
+</div>
+
+<button class="addsec" id="btnAddSec">＋ セクションを追加</button>
+
+<div class="zoomctl">
+  <button id="zoomOut" title="縮小">−</button>
+  <button id="zoomReset" class="pct" title="100%に戻す">100%</button>
+  <button id="zoomIn" title="拡大">＋</button>
+</div>
+
+<div class="hint">
+  <span><b>ドラッグ</b>で箱を移動／<b>背景ドラッグ</b>でスクロール／<b>Ctrl+ホイール</b>でズーム</span>
+  <div class="legend">
+    <span><i style="background:var(--flow)"></i>通常の流れ</span>
+    <span><i style="background:var(--branch)"></i>選択で分岐</span>
+    <span><i style="background:var(--submit)"></i>送信</span>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="drawer" id="drawer">
+  <div class="dhead">
+    <h3>生成されたGASコード</h3>
+    <span class="step">Apps Scriptに貼って実行</span>
+    <button class="dclose" id="drawerClose">×</button>
+  </div>
+  <div class="dstats" id="dStats"></div>
+  <pre id="codeOut"></pre>
+  <div class="dfoot">
+    <span class="note">① script.google.com で新規プロジェクト → ② コードを貼り付け → ③ <b>createForm</b> を選んで実行（初回は承認）→ ④ ログにフォームのURLが出ます。</span>
+    <button class="btn primary" id="btnCopy">コードをコピー</button>
+  </div>
+</div>
+
+<div class="pv-scrim" id="pvScrim"></div>
+<div class="pv" id="pv">
+  <div class="pv-head">
+    <h3>▶ 回答プレビュー</h3>
+    <button class="pv-close" id="pvClose">×</button>
+  </div>
+  <div class="pv-trail" id="pvTrail"></div>
+  <div class="pv-body" id="pvBody"></div>
+  <div class="pv-foot">
+    <button class="btn ghost" id="pvBack">← 戻る</button>
+    <div class="spacer"></div>
+    <button class="btn ghost" id="pvRestart">最初から</button>
+    <button class="btn primary" id="pvNext">次へ →</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   State
+========================================================= */
+let uid = 1;
+const nid = () => 'i' + (uid++);
+const AUTOSAVE_KEY = 'formflow-autosave-v2';
+
+const QTYPES = {
+  short:    {label:'短文', branch:false, opts:false},
+  para:     {label:'段落', branch:false, opts:false},
+  radio:    {label:'単一選択', branch:true,  opts:true},
+  checkbox: {label:'複数選択', branch:false, opts:true},
+  dropdown: {label:'プルダウン', branch:true, opts:true},
+  date:     {label:'日付', branch:false, opts:false},
+  time:     {label:'時刻', branch:false, opts:false},
+  scale:    {label:'目盛り', branch:false, opts:false, scale:true},
+};
+
+function newOpt(text){ return {id:nid(), text:text||'選択肢', goto:''}; }
+function newScale(){ return {min:1, max:5, minLabel:'', maxLabel:''}; }
+function newQuestion(type){
+  const q = {id:nid(), type:type||'radio', title:'質問', required:false, options:[]};
+  if(QTYPES[q.type].opts) q.options = [newOpt('はい'), newOpt('いいえ')];
+  if(QTYPES[q.type].scale) q.scale = newScale();
+  return q;
+}
+function newSection(title){
+  return {id:nid(), title:title||'新しいセクション', description:'', x:80, y:80, next:'', questions:[]};
+}
+
+let state = {
+  title:'アンケート',
+  description:'',
+  sections:[]
+};
+
+function sampleState(){
+  const st = {title:'アンケート', description:'', sections:[]};
+  const s1 = newSection('はじめに');
+  s1.x=90; s1.y=70; s1.description='ご協力ありがとうございます。';
+  const q1 = newQuestion('radio');
+  q1.title='部活動に入っていますか？';
+  q1.options=[newOpt('入っている'), newOpt('入っていない')];
+
+  const s2 = newSection('部活動の人へ');
+  s2.x=470; s2.y=60;
+  const q2 = newQuestion('short'); q2.title='部活名を教えてください';
+
+  const s3 = newSection('帰宅部の人へ');
+  s3.x=470; s3.y=360;
+  const q3 = newQuestion('para'); q3.title='放課後は何をしていますか？';
+
+  q1.options[0].goto = s2.id;
+  q1.options[1].goto = s3.id;
+  s1.questions=[q1]; s2.questions=[q2]; s3.questions=[q3];
+  s2.next='SUBMIT'; s3.next='SUBMIT';
+  st.sections=[s1,s2,s3];
+  return st;
+}
+
+/* migrate/repair a loaded state (import・autosave) */
+function migrateState(st){
+  if(!st || !Array.isArray(st.sections)) throw new Error('bad');
+  st.title = st.title||''; st.description = st.description||'';
+  const ids = new Set(st.sections.map(s=>s.id));
+  st.sections.forEach((s,i)=>{
+    s.x = +s.x||80; s.y = +s.y||80;
+    s.title = s.title||''; s.description = s.description||'';
+    if(s.next && s.next!=='SUBMIT' && !ids.has(s.next)) s.next='';
+    if(!Array.isArray(s.questions)) s.questions=[];
+    s.questions.forEach(q=>{
+      if(!QTYPES[q.type]) q.type='short';
+      if(!Array.isArray(q.options)) q.options=[];
+      if(QTYPES[q.type].scale && !q.scale) q.scale=newScale();
+      q.options.forEach(o=>{ if(o.goto && o.goto!=='SUBMIT' && !ids.has(o.goto)) o.goto=''; });
+    });
+  });
+  return st;
+}
+
+/* =========================================================
+   Helpers
+========================================================= */
+const $  = (s,el=document)=>el.querySelector(s);
+const $$ = (s,el=document)=>[...el.querySelectorAll(s)];
+const secById = id => state.sections.find(s=>s.id===id);
+const secIndex = id => state.sections.findIndex(s=>s.id===id);
+const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function toast(msg){
+  const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),1900);
+}
+
+function syncUidFrom(st){
+  let mx=uid;
+  JSON.stringify(st).replace(/"i(\d+)"/g,(m,n)=>{mx=Math.max(mx,+n+1);return m;});
+  uid=mx;
+}
+
+/* branchable targets = sections other than #1 (Formsは先頭には戻れない) */
+function targetOptions(currentId, selected, withSubmit){
+  let html = '<option value="">'+(withSubmit?'（自動で次へ）':'（そのまま次へ）')+'</option>';
+  state.sections.forEach((s,i)=>{
+    if(i===0) return;                 // section1 は分岐先にできない
+    if(s.id===currentId) return;      // 自分自身へは繋がない
+    const sel = s.id===selected?' selected':'';
+    html += '<option value="'+s.id+'"'+sel+'>→ '+(i+1)+'. '+esc(s.title||'セクション'+(i+1))+'</option>';
+  });
+  const ssel = selected==='SUBMIT'?' selected':'';
+  html += '<option value="SUBMIT"'+ssel+'>→ 送信して終了</option>';
+  return html;
+}
+
+/* =========================================================
+   History (undo/redo) + autosave
+========================================================= */
+let hist=[], hi=-1, histTimer=null;
+
+function autosave(){
+  try{ localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(state)); }catch(e){}
+}
+function updateHistBtns(){
+  $('#btnUndo').disabled = hi<=0;
+  $('#btnRedo').disabled = hi>=hist.length-1;
+}
+function pushHistory(){
+  clearTimeout(histTimer); histTimer=null;
+  const s=JSON.stringify(state);
+  if(s===hist[hi]) { autosave(); return; }
+  hist = hist.slice(0,hi+1);
+  hist.push(s);
+  if(hist.length>100) hist.shift();
+  hi = hist.length-1;
+  updateHistBtns(); autosave();
+}
+function pushHistoryDebounced(){
+  clearTimeout(histTimer);
+  histTimer=setTimeout(pushHistory, 600);
+}
+function applyHistory(json){
+  state = migrateState(JSON.parse(json));
+  syncUidFrom(state);
+  $('#formTitle').value=state.title||''; $('#formDesc').value=state.description||'';
+  render(); autosave(); updateHistBtns();
+}
+function undo(){ if(hi>0){ hi--; applyHistory(hist[hi]); } }
+function redo(){ if(hi<hist.length-1){ hi++; applyHistory(hist[hi]); } }
+
+/* =========================================================
+   Validation
+========================================================= */
+/* adjacency (index-based)。到達可能性の判定用：
+   分岐先の指定がない選択肢は「次のセクション or 回答後の指定先」へ流れる */
+function buildAdj(){
+  const S=state.sections;
+  const idx=new Map(S.map((s,i)=>[s.id,i]));
+  return S.map((sec,i)=>{
+    const outs=new Set();
+    let allOptsBranch=true, hasBranch=false;
+    sec.questions.forEach(q=>{
+      if(!QTYPES[q.type].branch) return;
+      q.options.forEach(o=>{
+        if(o.goto && o.goto!=='SUBMIT' && idx.has(o.goto)){ outs.add(idx.get(o.goto)); hasBranch=true; }
+        else if(o.goto==='SUBMIT'){ hasBranch=true; }
+        else allOptsBranch=false;
+      });
+    });
+    if(!sec.questions.some(q=>QTYPES[q.type].branch && q.options.length)) allOptsBranch=false;
+    if(sec.next && sec.next!=='SUBMIT' && idx.has(sec.next)) outs.add(idx.get(sec.next));
+    else if(!sec.next && sec.next!=='SUBMIT' && i<S.length-1 && !allOptsBranch) outs.add(i+1);
+    return [...outs];
+  });
+}
+
+function computeIssues(){
+  const S=state.sections;
+  const adj=buildAdj();
+  const reach=new Set([0]); const qq=[0];
+  while(qq.length){ const u=qq.shift(); (adj[u]||[]).forEach(v=>{ if(!reach.has(v)){ reach.add(v); qq.push(v); } }); }
+  const map=new Map();
+  S.forEach((sec,i)=>{
+    const msgs=[];
+    if(i>0 && !reach.has(i)) msgs.push('どこからも到達できません。分岐先や「回答後」を確認してください。');
+    const bqs=sec.questions.filter(q=>QTYPES[q.type].branch && q.options.some(o=>o.goto));
+    if(bqs.length>1) msgs.push('分岐する質問が複数あります。Googleフォームでは下にある質問の分岐が優先されます。');
+    if(msgs.length) map.set(sec.id, msgs);
+  });
+  return map;
+}
+
+/* =========================================================
+   Render nodes
+========================================================= */
+const nodesEl = $('#nodes');
+
+function render(){
+  const issues=computeIssues();
+  nodesEl.innerHTML='';
+  state.sections.forEach((sec,i)=>nodesEl.appendChild(buildNode(sec,i,issues.get(sec.id))));
+  $$('.sec-desc',nodesEl).forEach(t=>{ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; });
+  drawWires();
+}
+
+function buildNode(sec,i,issueMsgs){
+  const isStart = i===0;
+  const node=document.createElement('div');
+  node.className='node'+(isStart?' start':'');
+  node.style.left=sec.x+'px'; node.style.top=sec.y+'px';
+  node.dataset.sid=sec.id;
+
+  /* head */
+  const head=document.createElement('div');
+  head.className='head';
+  head.innerHTML =
+    '<span class="sec-no">'+(isStart?'START · 1':'SEC '+(i+1))+'</span>'+
+    '<input class="sec-title-in" data-act="secTitle" placeholder="セクション名" value="'+esc(sec.title)+'">'+
+    (issueMsgs?'<span class="warnb" title="'+esc(issueMsgs.join('\n'))+'">⚠</span>':'')+
+    '<button class="hbtn" data-act="dupSec" title="このセクションを複製">⧉</button>'+
+    (isStart?'':'<button class="hbtn del" data-act="delSec" title="削除">✕</button>');
+  node.appendChild(head);
+
+  /* body */
+  const body=document.createElement('div');
+  body.className='body';
+
+  const desc=document.createElement('textarea');
+  desc.className='sec-desc'; desc.rows=1; desc.placeholder='説明（任意）';
+  desc.dataset.act='secDesc'; desc.value=sec.description||'';
+  body.appendChild(desc);
+
+  sec.questions.forEach((q,qi)=>body.appendChild(buildQuestion(q,sec,qi)));
+
+  const addq=document.createElement('button');
+  addq.className='addq'; addq.dataset.act='addQ';
+  addq.innerHTML='＋ 質問を追加';
+  body.appendChild(addq);
+  node.appendChild(body);
+
+  /* foot: section flow */
+  const foot=document.createElement('div');
+  foot.className='foot';
+  const submitSel = sec.next==='SUBMIT';
+  const jumpSel = sec.next && !submitSel;
+  foot.innerHTML='<span>回答後：</span>'+
+    '<select data-act="secNext" class="'+(submitSel?'submit':(jumpSel?'jump':''))+'">'+targetOptions(sec.id, sec.next, true)+'</select>';
+  node.appendChild(foot);
+
+  return node;
+}
+
+function buildQuestion(q,sec,qi){
+  const wrap=document.createElement('div');
+  wrap.className='q'; wrap.dataset.qid=q.id; wrap.dataset.type=q.type;
+
+  const top=document.createElement('div'); top.className='q-top';
+  let typeOpts='';
+  for(const k in QTYPES){ typeOpts+='<option value="'+k+'"'+(k===q.type?' selected':'')+'>'+QTYPES[k].label+'</option>'; }
+  top.innerHTML=
+    '<input class="q-title" data-act="qTitle" placeholder="質問文" value="'+esc(q.title)+'">'+
+    '<select class="q-type" data-act="qType">'+typeOpts+'</select>'+
+    '<button class="q-del" data-act="delQ" title="削除">🗑</button>';
+  wrap.appendChild(top);
+
+  if(QTYPES[q.type].opts){
+    q.options.forEach(o=>{
+      const row=document.createElement('div'); row.className='opt'; row.dataset.oid=o.id;
+      let sel='';
+      if(QTYPES[q.type].branch){
+        const on = o.goto ? ' on':'';
+        sel='<select class="goto'+on+'" data-act="optGoto" title="この選択肢を選んだ人の行き先">'+targetOptions(sec.id, o.goto, false)+'</select>';
+      }
+      row.innerHTML=
+        '<span class="dot"></span>'+
+        '<input data-act="optText" placeholder="選択肢" value="'+esc(o.text)+'">'+
+        sel+
+        '<button class="opt-del" data-act="delOpt" title="削除">✕</button>';
+      wrap.appendChild(row);
+    });
+    const addopt=document.createElement('button');
+    addopt.className='add-opt'; addopt.dataset.act='addOpt'; addopt.textContent='＋ 選択肢';
+    wrap.appendChild(addopt);
+  }
+
+  if(QTYPES[q.type].scale){
+    const sc=q.scale||(q.scale=newScale());
+    const row1=document.createElement('div'); row1.className='scale-row';
+    let minSel='', maxSel='';
+    [0,1].forEach(v=>minSel+='<option value="'+v+'"'+(v===sc.min?' selected':'')+'>'+v+'</option>');
+    for(let v=2;v<=10;v++) maxSel+='<option value="'+v+'"'+(v===sc.max?' selected':'')+'>'+v+'</option>';
+    row1.innerHTML='<span>目盛り</span><select data-act="scMin">'+minSel+'</select><span>〜</span><select data-act="scMax">'+maxSel+'</select>';
+    wrap.appendChild(row1);
+    const row2=document.createElement('div'); row2.className='scale-row';
+    row2.innerHTML=
+      '<input data-act="scMinL" placeholder="左端ラベル（例：低い）" value="'+esc(sc.minLabel)+'">'+
+      '<input data-act="scMaxL" placeholder="右端ラベル（例：高い）" value="'+esc(sc.maxLabel)+'">';
+    wrap.appendChild(row2);
+  }
+
+  const req=document.createElement('label'); req.className='req';
+  req.innerHTML='<input type="checkbox" data-act="qReq"'+(q.required?' checked':'')+'>必須';
+  top.appendChild(req);
+
+  /* reorder buttons (shown on hover) */
+  if(sec.questions.length>1){
+    const mv=document.createElement('div'); mv.className='q-move';
+    mv.innerHTML=
+      (qi>0?'<button data-act="qUp" title="上へ">▲</button>':'')+
+      (qi<sec.questions.length-1?'<button data-act="qDown" title="下へ">▼</button>':'');
+    wrap.appendChild(mv);
+  }
+
+  return wrap;
+}
+
+/* =========================================================
+   Wires (SVG)
+========================================================= */
+const wires=$('#wires'), content=$('#content'), canvas=$('#canvas');
+const view={scale:1};
+
+function anchorRight(el){
+  const c=content.getBoundingClientRect(), r=el.getBoundingClientRect(), k=view.scale;
+  return {x:(r.right-c.left)/k, y:(r.top-c.top+r.height/2)/k};
+}
+function nodeBox(sid){
+  const el=nodesEl.querySelector('.node[data-sid="'+sid+'"]');
+  if(!el) return null;
+  const c=content.getBoundingClientRect(), r=el.getBoundingClientRect(), k=view.scale;
+  return {left:(r.left-c.left)/k, right:(r.right-c.left)/k, top:(r.top-c.top)/k, bottom:(r.bottom-c.top)/k,
+          cx:(r.left-c.left+r.width/2)/k, cy:(r.top-c.top+r.height/2)/k};
+}
+function nodeBottom(sid){
+  const b=nodeBox(sid); return b?{x:b.cx,y:b.bottom}:null;
+}
+
+function curveData(p1,p2,horiz){
+  let c1,c2;
+  if(horiz){
+    const dx=Math.max(40,Math.abs(p2.x-p1.x)*0.5);
+    c1={x:p1.x+dx,y:p1.y}; c2={x:p2.x-dx,y:p2.y};
+  } else {
+    const dy=Math.max(30,Math.abs(p2.y-p1.y)*0.5);
+    c1={x:p1.x,y:p1.y+dy}; c2={x:p2.x,y:p2.y-dy};
+  }
+  return {
+    d:'M '+p1.x+' '+p1.y+' C '+c1.x+' '+c1.y+', '+c2.x+' '+c2.y+', '+p2.x+' '+p2.y,
+    mid:{x:(p1.x+3*c1.x+3*c2.x+p2.x)/8, y:(p1.y+3*c1.y+3*c2.y+p2.y)/8}
+  };
+}
+
+function chipWidth(t){
+  let w=0; for(const ch of t) w += ch.charCodeAt(0)>255?10:6.2;
+  return w+14;
+}
+
+function drawWires(){
+  const NS='http://www.w3.org/2000/svg';
+  wires.innerHTML=
+    '<defs>'+
+    ['flow','branch','submit'].map(k=>{
+      const col=getComputedStyle(document.documentElement).getPropertyValue('--'+k);
+      return '<marker id="ah-'+k+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="'+col+'"/></marker>';
+    }).join('')+'</defs>';
+
+  const colOf=cls=>getComputedStyle(document.documentElement).getPropertyValue('--'+cls).trim();
+
+  const addWire=(p1,p2,horiz,cls,opts)=>{
+    opts=opts||{};
+    const {d,mid}=curveData(p1,p2,horiz);
+    const p=document.createElementNS(NS,'path');
+    p.setAttribute('d',d);
+    p.setAttribute('fill','none');
+    p.setAttribute('stroke','var(--'+cls+')');
+    p.setAttribute('stroke-width', cls==='branch'?'2.4':'2');
+    if(opts.dash) p.setAttribute('stroke-dasharray',opts.dash);
+    p.setAttribute('marker-end','url(#ah-'+cls+')');
+    p.setAttribute('stroke-linecap','round');
+    p.classList.add('wire');
+    if(opts.from) p.dataset.from=opts.from;
+    if(opts.to) p.dataset.to=opts.to;
+    wires.appendChild(p);
+    if(opts.label){
+      let t=[...opts.label]; if(t.length>7) t=t.slice(0,6).concat('…');
+      t=t.join('');
+      const w=chipWidth(t);
+      const g=document.createElementNS(NS,'g');
+      g.classList.add('wire');
+      if(opts.from) g.dataset.from=opts.from;
+      if(opts.to) g.dataset.to=opts.to;
+      const rc=document.createElementNS(NS,'rect');
+      rc.setAttribute('x',mid.x-w/2); rc.setAttribute('y',mid.y-9);
+      rc.setAttribute('width',w); rc.setAttribute('height',18);
+      rc.setAttribute('rx',9); rc.setAttribute('fill',colOf(cls));
+      const tx=document.createElementNS(NS,'text');
+      tx.setAttribute('x',mid.x); tx.setAttribute('y',mid.y+3.5);
+      tx.setAttribute('text-anchor','middle');
+      tx.setAttribute('class','wire-label');
+      tx.textContent=t;
+      g.appendChild(rc); g.appendChild(tx);
+      wires.appendChild(g);
+    }
+  };
+
+  state.sections.forEach((sec,i)=>{
+    const nodeEl=nodesEl.querySelector('.node[data-sid="'+sec.id+'"]');
+    if(!nodeEl) return;
+
+    /* 1) branch wires from options */
+    sec.questions.forEach(q=>{
+      if(!QTYPES[q.type].branch) return;
+      q.options.forEach(o=>{
+        if(!o.goto) return;
+        const optEl=nodeEl.querySelector('.opt[data-oid="'+o.id+'"]');
+        if(!optEl) return;
+        const p1=anchorRight(optEl);
+        if(o.goto==='SUBMIT'){
+          addWire(p1,{x:p1.x+64,y:p1.y},true,'submit',{dash:'4 4',from:sec.id,label:'送信'});
+        } else {
+          const tb=nodeBox(o.goto); if(!tb) return;
+          const p2={x:tb.left, y:tb.top+22};
+          addWire(p1,p2,true,'branch',{from:sec.id,to:o.goto,label:o.text});
+        }
+      });
+    });
+
+    /* 2) section-level flow (回答後) */
+    const isLast = i===state.sections.length-1;
+    if(sec.next==='SUBMIT' || (isLast && !sec.next)){
+      const nb=nodeBottom(sec.id);
+      if(nb) addWire(nb,{x:nb.x,y:nb.y+46},false,'submit',{dash:'4 4',from:sec.id,label:'送信'});
+    } else if(sec.next){
+      const tb=nodeBox(sec.next); if(tb){
+        addWire(nodeBottom(sec.id),{x:tb.left,y:tb.top+22},false,'flow',{dash:'6 5',from:sec.id,to:sec.next});
+      }
+    } else if(!isLast){
+      /* implicit next in array order (only if no branching drives it) */
+      const hasBranch = sec.questions.some(q=>QTYPES[q.type].branch && q.options.some(o=>o.goto));
+      if(!hasBranch){
+        const nx=state.sections[i+1];
+        const tb=nodeBox(nx.id); if(tb){
+          addWire(nodeBottom(sec.id),{x:tb.cx,y:tb.top},false,'flow',{dash:'6 5',from:sec.id,to:nx.id});
+        }
+      }
+    }
+  });
+}
+
+/* hover: highlight wires connected to the hovered node */
+function setWireFocus(sid){
+  if(!sid){ wires.classList.remove('focused'); return; }
+  wires.classList.add('focused');
+  $$('.wire',wires).forEach(el=>el.classList.toggle('hot', el.dataset.from===sid||el.dataset.to===sid));
+}
+nodesEl.addEventListener('pointerover',e=>{
+  const n=e.target.closest('.node');
+  setWireFocus(n?n.dataset.sid:null);
+});
+nodesEl.addEventListener('pointerleave',()=>setWireFocus(null));
+
+/* =========================================================
+   Event delegation
+========================================================= */
+function findCtx(el){
+  const node=el.closest('.node'); const qEl=el.closest('.q'); const optEl=el.closest('.opt');
+  return {
+    sec: node? secById(node.dataset.sid):null,
+    q:   (node&&qEl)? secById(node.dataset.sid).questions.find(x=>x.id===qEl.dataset.qid):null,
+    opt: null,
+    optEl, qEl, node
+  };
+}
+function optOf(el){
+  const node=el.closest('.node'), qEl=el.closest('.q'), optEl=el.closest('.opt');
+  const sec=secById(node.dataset.sid);
+  const q=sec.questions.find(x=>x.id===qEl.dataset.qid);
+  const opt=q.options.find(x=>x.id===optEl.dataset.oid);
+  return {sec,q,opt};
+}
+
+/* live text edits: update state only (keep focus), refresh wires */
+document.addEventListener('input',e=>{
+  const a=e.target.dataset.act; if(!a) return;
+  if(a==='formTitle'){ state.title=e.target.value; pushHistoryDebounced(); return; }
+  if(a==='formDesc'){ state.description=e.target.value; pushHistoryDebounced(); return; }
+  const ctx=findCtx(e.target); if(!ctx.sec) return;
+  if(a==='secTitle'){ ctx.sec.title=e.target.value; refreshTargetLabels(); drawWires(); pushHistoryDebounced(); return; }
+  if(a==='secDesc'){ ctx.sec.description=e.target.value; e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; drawWires(); pushHistoryDebounced(); return; }
+  if(a==='qTitle'){ ctx.q.title=e.target.value; pushHistoryDebounced(); return; }
+  if(a==='optText'){ optOf(e.target).opt.text=e.target.value; drawWires(); pushHistoryDebounced(); return; }
+  if(a==='scMinL'){ ctx.q.scale.minLabel=e.target.value; pushHistoryDebounced(); return; }
+  if(a==='scMaxL'){ ctx.q.scale.maxLabel=e.target.value; pushHistoryDebounced(); return; }
+});
+
+/* change events that alter structure/targets → re-render */
+document.addEventListener('change',e=>{
+  const a=e.target.dataset.act; if(!a) return;
+  const ctx=findCtx(e.target);
+  if(a==='qType'){
+    const q=ctx.q; const nt=e.target.value; q.type=nt;
+    if(QTYPES[nt].opts && q.options.length===0) q.options=[newOpt('はい'),newOpt('いいえ')];
+    if(!QTYPES[nt].opts) q.options=[];
+    if(!QTYPES[nt].branch) q.options.forEach(o=>o.goto='');
+    if(QTYPES[nt].scale && !q.scale) q.scale=newScale();
+    render(); pushHistory(); return;
+  }
+  if(a==='qReq'){ ctx.q.required=e.target.checked; pushHistory(); return; }
+  if(a==='secNext'){ ctx.sec.next=e.target.value; render(); pushHistory(); return; }
+  if(a==='optGoto'){ optOf(e.target).opt.goto=e.target.value; render(); pushHistory(); return; }
+  if(a==='scMin'){ ctx.q.scale.min=+e.target.value; pushHistory(); return; }
+  if(a==='scMax'){ ctx.q.scale.max=+e.target.value; pushHistory(); return; }
+});
+
+/* clicks: add/delete/move/duplicate */
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('[data-act]'); if(!btn) return;
+  const a=btn.dataset.act;
+  if(a==='addQ'){ const s=findCtx(btn).sec; s.questions.push(newQuestion('radio')); render(); pushHistory(); return; }
+  if(a==='delQ'){ const {sec,q}=findCtx(btn); sec.questions=sec.questions.filter(x=>x.id!==q.id); render(); pushHistory(); return; }
+  if(a==='addOpt'){ const {q}=findCtx(btn); q.options.push(newOpt('選択肢')); render(); pushHistory(); return; }
+  if(a==='delOpt'){ const {q,opt}=optOf(btn); q.options=q.options.filter(x=>x.id!==opt.id); render(); pushHistory(); return; }
+  if(a==='qUp'||a==='qDown'){
+    const {sec,q}=findCtx(btn);
+    const i=sec.questions.indexOf(q), j=a==='qUp'?i-1:i+1;
+    if(j<0||j>=sec.questions.length) return;
+    [sec.questions[i],sec.questions[j]]=[sec.questions[j],sec.questions[i]];
+    render(); pushHistory(); return;
+  }
+  if(a==='dupSec'){
+    const s=findCtx(btn).sec;
+    const copy=JSON.parse(JSON.stringify(s));
+    copy.id=nid(); copy.title=(s.title||'セクション')+'（コピー）';
+    copy.x=s.x+40; copy.y=s.y+40;
+    copy.questions.forEach(q=>{ q.id=nid(); q.options.forEach(o=>o.id=nid()); });
+    const at=secIndex(s.id);
+    state.sections.splice(at+1,0,copy);
+    render(); pushHistory(); toast('セクションを複製しました');
+    return;
+  }
+  if(a==='delSec'){
+    const s=findCtx(btn).sec;
+    if(!confirm('このセクションを削除しますか？（分岐先の指定も外れます）')) return;
+    state.sections=state.sections.filter(x=>x.id!==s.id);
+    state.sections.forEach(sec=>{
+      if(sec.next===s.id) sec.next='';
+      sec.questions.forEach(q=>q.options.forEach(o=>{ if(o.goto===s.id) o.goto=''; }));
+    });
+    render(); pushHistory(); return;
+  }
+});
+
+/* Enter on option text → insert a new option below and focus it */
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter' && e.target.dataset && e.target.dataset.act==='optText'){
+    e.preventDefault();
+    const {q,opt}=optOf(e.target);
+    const no=newOpt('');
+    q.options.splice(q.options.indexOf(opt)+1,0,no);
+    render(); pushHistory();
+    const el=nodesEl.querySelector('.opt[data-oid="'+no.id+'"] input[data-act="optText"]');
+    if(el) el.focus();
+  }
+});
+
+function refreshTargetLabels(){
+  /* update option text inside every target <select> without losing selection */
+  $$('select[data-act="optGoto"], select[data-act="secNext"]').forEach(sel=>{
+    const node=sel.closest('.node'); const sid=node.dataset.sid;
+    const withSubmit = sel.dataset.act==='secNext';
+    sel.innerHTML=targetOptions(sid, sel.value, withSubmit);
+  });
+}
+
+/* =========================================================
+   Drag nodes / pan canvas / zoom
+========================================================= */
+let drag=null;
+document.addEventListener('pointerdown',e=>{
+  const head=e.target.closest('.head'); if(!head) return;
+  if(e.target.closest('input,button,select,textarea')) return;
+  const node=head.closest('.node'); const sec=secById(node.dataset.sid);
+  drag={node,sec, sx:e.clientX, sy:e.clientY, ox:sec.x, oy:sec.y};
+  node.style.zIndex=20; head.setPointerCapture(e.pointerId);
+});
+document.addEventListener('pointermove',e=>{
+  if(!drag) return;
+  const k=view.scale;
+  drag.sec.x=Math.max(0,drag.ox+(e.clientX-drag.sx)/k);
+  drag.sec.y=Math.max(0,drag.oy+(e.clientY-drag.sy)/k);
+  drag.node.style.left=drag.sec.x+'px'; drag.node.style.top=drag.sec.y+'px';
+  drawWires();
+});
+document.addEventListener('pointerup',()=>{ if(drag){ drag.node.style.zIndex=''; drag=null; pushHistory(); } });
+
+/* pan by dragging the empty canvas */
+let pan=null;
+canvas.addEventListener('pointerdown',e=>{
+  if(e.button!==0 && e.button!==1) return;
+  if(e.target!==canvas && e.target!==content) return;
+  pan={x:e.clientX,y:e.clientY,sl:canvas.scrollLeft,st:canvas.scrollTop};
+  canvas.classList.add('panning');
+  canvas.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+canvas.addEventListener('pointermove',e=>{
+  if(!pan) return;
+  canvas.scrollLeft=pan.sl-(e.clientX-pan.x);
+  canvas.scrollTop=pan.st-(e.clientY-pan.y);
+});
+canvas.addEventListener('pointerup',()=>{ pan=null; canvas.classList.remove('panning'); });
+
+/* zoom */
+function applyView(){ content.style.transform='scale('+view.scale+')'; $('#zoomReset').textContent=Math.round(view.scale*100)+'%'; }
+function zoomAt(cx,cy,ns){
+  ns=Math.min(1.6,Math.max(0.35,ns));
+  const old=view.scale; if(Math.abs(ns-old)<0.001) return;
+  const px=(canvas.scrollLeft+cx)/old, py=(canvas.scrollTop+cy)/old;
+  view.scale=ns; applyView();
+  canvas.scrollLeft=px*ns-cx; canvas.scrollTop=py*ns-cy;
+}
+canvas.addEventListener('wheel',e=>{
+  if(!e.ctrlKey && !e.metaKey) return;
+  e.preventDefault();
+  const rect=canvas.getBoundingClientRect();
+  zoomAt(e.clientX-rect.left, e.clientY-rect.top, view.scale*(e.deltaY<0?1.12:1/1.12));
+},{passive:false});
+$('#zoomIn').addEventListener('click',()=>zoomAt(canvas.clientWidth/2,canvas.clientHeight/2,view.scale*1.2));
+$('#zoomOut').addEventListener('click',()=>zoomAt(canvas.clientWidth/2,canvas.clientHeight/2,view.scale/1.2));
+$('#zoomReset').addEventListener('click',()=>zoomAt(canvas.clientWidth/2,canvas.clientHeight/2,1));
+
+/* =========================================================
+   Add section / New / Auto layout
+========================================================= */
+$('#btnAddSec').addEventListener('click',()=>{
+  const s=newSection('セクション'+(state.sections.length+1));
+  const k=view.scale;
+  s.x=(canvas.scrollLeft+120)/k; s.y=(canvas.scrollTop+120)/k;
+  state.sections.push(s); render(); pushHistory();
+  canvas.scrollTo({left:s.x*k-100, top:s.y*k-100, behavior:'smooth'});
+});
+
+$('#btnNew').addEventListener('click',()=>{
+  if(!confirm('新しい設計図を作りますか？（今の内容は消えます。必要なら先に「保存」してください）')) return;
+  state={title:'アンケート',description:'',sections:[newSection('はじめに')]};
+  state.sections[0].questions=[newQuestion('radio')];
+  $('#formTitle').value=state.title; $('#formDesc').value='';
+  render(); pushHistory(); toast('新しい設計図を作りました');
+});
+
+$('#btnLayout').addEventListener('click',()=>{
+  const S=state.sections; if(!S.length) return;
+  const adj=buildAdj();
+  const level=Array(S.length).fill(-1); level[0]=0; const qq=[0];
+  while(qq.length){ const u=qq.shift(); adj[u].forEach(v=>{ if(level[v]===-1){ level[v]=level[u]+1; qq.push(v); } }); }
+  let maxL=Math.max(0,...level.filter(l=>l>=0));
+  level.forEach((l,i)=>{ if(l===-1) level[i]=maxL+1; });
+  const cols={};
+  S.forEach((s,i)=>{ (cols[level[i]]=cols[level[i]]||[]).push(i); });
+  const COLW=350, X0=70, Y0=70, GAP=40;
+  Object.keys(cols).map(Number).sort((a,b)=>a-b).forEach(l=>{
+    let y=Y0;
+    cols[l].forEach(i=>{
+      const s=S[i];
+      s.x=X0+l*COLW; s.y=y;
+      const el=nodesEl.querySelector('.node[data-sid="'+s.id+'"]');
+      y += (el?el.offsetHeight:220)+GAP;
+    });
+  });
+  render(); pushHistory();
+  canvas.scrollTo({left:0,top:0,behavior:'smooth'});
+  toast('流れに沿って整列しました');
+});
+
+/* =========================================================
+   Answer preview (回答シミュレーション)
+========================================================= */
+const pvEl=$('#pv'), pvScrim=$('#pvScrim'), pvBody=$('#pvBody'), pvTrail=$('#pvTrail');
+let pv=null;
+
+function openPreview(){
+  if(!state.sections.length){ toast('セクションがありません'); return; }
+  pv={sid:state.sections[0].id, trail:[], answers:{}, done:false};
+  pvEl.classList.add('open'); pvScrim.classList.add('open');
+  renderPreview();
+}
+function closePreview(){ pvEl.classList.remove('open'); pvScrim.classList.remove('open'); pv=null; }
+$('#pvClose').addEventListener('click',closePreview);
+pvScrim.addEventListener('click',closePreview);
+$('#btnPreview').addEventListener('click',openPreview);
+$('#pvRestart').addEventListener('click',()=>{ if(pv){ pv={sid:state.sections[0].id,trail:[],answers:{},done:false}; renderPreview(); } });
+
+function pvRenderTrail(){
+  const names=pv.trail.map(id=>{ const s=secById(id); return s?(s.title||'…'):'…'; });
+  if(!pv.done){ const c=secById(pv.sid); names.push(c?(c.title||'…'):'…'); }
+  let html='<span>経路：</span>';
+  const start=Math.max(0,names.length-6);
+  if(start>0) html+='<span>…</span>';
+  names.slice(start).forEach((n,i)=>{
+    const isCur=!pv.done && start+i===names.length-1;
+    html+='<span class="tchip'+(isCur?' cur':'')+'">'+esc(n)+'</span>';
+    if(start+i<names.length-1) html+='<span>→</span>';
+  });
+  if(pv.done) html+='<span>→</span><span class="tchip" style="background:#effaf5;color:var(--submit)">送信 ✓</span>';
+  pvTrail.innerHTML=html;
+}
+
+function renderPreview(){
+  pvRenderTrail();
+  $('#pvBack').style.visibility = pv.trail.length?'visible':'hidden';
+  if(pv.done){
+    $('#pvNext').classList.add('hidden');
+    pvBody.innerHTML=
+      '<div class="pv-done"><div class="big">🎉</div><h4>送信完了（プレビュー）</h4>'+
+      '<p>実際のフォームでもこの流れで回答が進みます。<br>「最初から」で別の分岐も試せます。</p></div>';
+    return;
+  }
+  $('#pvNext').classList.remove('hidden');
+  const sec=secById(pv.sid);
+  if(!sec){ closePreview(); return; }
+  let html='<h4 class="pv-sec-title">'+esc(sec.title||'（無題のセクション）')+'</h4>';
+  html+='<p class="pv-sec-desc">'+esc(sec.description||'')+'</p>';
+  sec.questions.forEach(q=>{
+    const t=QTYPES[q.type];
+    const saved=pv.answers[q.id];
+    html+='<div class="pv-q" data-qid="'+q.id+'"><p class="pq-title">'+esc(q.title||'質問')+(q.required?'<span class="rq">*</span>':'')+'</p>';
+    if(q.type==='radio'||q.type==='checkbox'){
+      const it=q.type==='radio'?'radio':'checkbox';
+      q.options.forEach(o=>{
+        const chk = q.type==='radio' ? saved===o.id : (Array.isArray(saved)&&saved.includes(o.id));
+        html+='<label class="pv-opt"><input type="'+it+'" name="'+q.id+'" value="'+o.id+'"'+(chk?' checked':'')+'>'+esc(o.text)+
+          (o.goto?'<span class="pv-branch-tag">'+(o.goto==='SUBMIT'?'→ 送信':'→ '+esc((secById(o.goto)||{}).title||'?'))+'</span>':'')+
+          '</label>';
+      });
+    } else if(q.type==='dropdown'){
+      html+='<select name="'+q.id+'"><option value="">選択してください</option>';
+      q.options.forEach(o=>{
+        html+='<option value="'+o.id+'"'+(saved===o.id?' selected':'')+'>'+esc(o.text)+(o.goto?'（分岐あり）':'')+'</option>';
+      });
+      html+='</select>';
+    } else if(q.type==='short'){
+      html+='<input type="text" name="'+q.id+'" placeholder="回答を入力" value="'+esc(saved||'')+'">';
+    } else if(q.type==='para'){
+      html+='<textarea name="'+q.id+'" rows="3" placeholder="回答を入力">'+esc(saved||'')+'</textarea>';
+    } else if(q.type==='date'){
+      html+='<input type="date" name="'+q.id+'" value="'+esc(saved||'')+'">';
+    } else if(q.type==='time'){
+      html+='<input type="time" name="'+q.id+'" value="'+esc(saved||'')+'">';
+    } else if(q.type==='scale'){
+      const sc=q.scale||newScale();
+      html+='<div class="pv-scale">';
+      if(sc.minLabel) html+='<div class="sc"><span class="sc-lab">'+esc(sc.minLabel)+'</span></div>';
+      for(let v=sc.min; v<=sc.max; v++){
+        html+='<div class="sc"><span>'+v+'</span><input type="radio" name="'+q.id+'" value="'+v+'"'+(saved==v?' checked':'')+'></div>';
+      }
+      if(sc.maxLabel) html+='<div class="sc"><span class="sc-lab">'+esc(sc.maxLabel)+'</span></div>';
+      html+='</div>';
+    }
+    html+='</div>';
+  });
+  if(!sec.questions.length) html+='<p style="font-size:12px;color:var(--ink-soft)">（このセクションに質問はありません）</p>';
+  pvBody.innerHTML=html;
+  pvBody.scrollTop=0;
+}
+
+function pvCollect(sec){
+  /* read answers from DOM into pv.answers; return list of unanswered required q ids */
+  const missing=[];
+  sec.questions.forEach(q=>{
+    let val=null;
+    const els=$$('[name="'+q.id+'"]',pvBody);
+    if(q.type==='radio'||q.type==='scale'){
+      const c=els.find(e=>e.checked); val=c?c.value:null;
+    } else if(q.type==='checkbox'){
+      val=els.filter(e=>e.checked).map(e=>e.value);
+    } else if(els[0]){
+      val=els[0].value;
+    }
+    pv.answers[q.id]=val;
+    const empty = val==null || val==='' || (Array.isArray(val)&&!val.length);
+    if(q.required && empty) missing.push(q.id);
+  });
+  return missing;
+}
+
+function pvNextTarget(sec){
+  /* Google Formsの仕様に合わせ、分岐質問が複数ある場合は下の質問の分岐が優先 */
+  let nav=null;
+  sec.questions.forEach(q=>{
+    if(!QTYPES[q.type].branch) return;
+    const sel=pv.answers[q.id];
+    if(!sel) return;
+    const o=q.options.find(x=>x.id===sel);
+    if(o && o.goto) nav=o.goto;
+  });
+  if(nav) return nav;
+  if(sec.next) return sec.next;
+  const i=secIndex(sec.id);
+  return (i>=0 && i<state.sections.length-1) ? state.sections[i+1].id : 'SUBMIT';
+}
+
+$('#pvNext').addEventListener('click',()=>{
+  if(!pv||pv.done) return;
+  const sec=secById(pv.sid); if(!sec) return;
+  const missing=pvCollect(sec);
+  $$('.pv-q',pvBody).forEach(el=>el.classList.toggle('invalid', missing.includes(el.dataset.qid)));
+  if(missing.length){ toast('必須の質問に回答してください'); return; }
+  const target=pvNextTarget(sec);
+  pv.trail.push(pv.sid);
+  if(target==='SUBMIT'){ pv.done=true; }
+  else if(secById(target)){ pv.sid=target; }
+  else { pv.done=true; }
+  renderPreview();
+});
+$('#pvBack').addEventListener('click',()=>{
+  if(!pv) return;
+  if(pv.done){ pv.done=false; pv.sid=pv.trail.pop()||state.sections[0].id; }
+  else if(pv.trail.length){ pv.sid=pv.trail.pop(); }
+  renderPreview();
+});
+
+/* =========================================================
+   GAS generation
+========================================================= */
+function jstr(s){ return JSON.stringify(String(s==null?'':s)); }
+
+function generateGAS(){
+  const S=state.sections;
+  const varOf={}; S.forEach((s,i)=> varOf[s.id]= i===0?null:('sec'+(i+1)) );
+  const L=[];
+  const deferChoices=[];   // branching questions
+  const navs=[];           // section navigation
+
+  L.push('function createForm() {');
+  L.push('  var form = FormApp.create('+jstr(state.title||'無題のフォーム')+');');
+  if(state.description) L.push('  form.setDescription('+jstr(state.description)+');');
+  L.push('');
+
+  S.forEach((sec,i)=>{
+    L.push('  // ===== セクション'+(i+1)+'：'+ (sec.title||'') +' =====');
+    if(i===0){
+      if(sec.title || sec.description){
+        let h='  form.addSectionHeaderItem().setTitle('+jstr(sec.title||'')+')';
+        if(sec.description) h+='.setHelpText('+jstr(sec.description)+')';
+        L.push(h+';');
+      }
+    } else {
+      const v=varOf[sec.id];
+      let h='  var '+v+' = form.addPageBreakItem().setTitle('+jstr(sec.title||('セクション'+(i+1)))+')';
+      if(sec.description) h+='.setHelpText('+jstr(sec.description)+')';
+      L.push(h+';');
+    }
+
+    sec.questions.forEach((q,qi)=>{
+      const v='q_'+(i+1)+'_'+(qi+1);
+      const t=QTYPES[q.type];
+      const hasBranch = t.branch && q.options.some(o=>o.goto);
+      let head;
+      if(q.type==='short')        head='  var '+v+' = form.addTextItem()';
+      else if(q.type==='para')    head='  var '+v+' = form.addParagraphTextItem()';
+      else if(q.type==='radio')   head='  var '+v+' = form.addMultipleChoiceItem()';
+      else if(q.type==='checkbox')head='  var '+v+' = form.addCheckboxItem()';
+      else if(q.type==='dropdown')head='  var '+v+' = form.addListItem()';
+      else if(q.type==='date')    head='  var '+v+' = form.addDateItem()';
+      else if(q.type==='time')    head='  var '+v+' = form.addTimeItem()';
+      else if(q.type==='scale')   head='  var '+v+' = form.addScaleItem()';
+      head+='.setTitle('+jstr(q.title||'質問')+')';
+      if(q.type==='scale'){
+        const sc=q.scale||{min:1,max:5,minLabel:'',maxLabel:''};
+        head+='.setBounds('+(+sc.min)+', '+(+sc.max)+')';
+        if(sc.minLabel||sc.maxLabel) head+='.setLabels('+jstr(sc.minLabel)+', '+jstr(sc.maxLabel)+')';
+      }
+      if(q.required) head+='.setRequired(true)';
+
+      if(t.opts && !hasBranch){
+        const vals='['+q.options.map(o=>jstr(o.text)).join(', ')+']';
+        head+='.setChoiceValues('+vals+')';
+      }
+      L.push(head+';');
+
+      if(hasBranch){
+        const parts=q.options.map(o=>{
+          if(o.goto==='SUBMIT') return '    '+v+'.createChoice('+jstr(o.text)+', FormApp.PageNavigationType.SUBMIT)';
+          if(o.goto && varOf[o.goto]) return '    '+v+'.createChoice('+jstr(o.text)+', '+varOf[o.goto]+')';
+          return '    '+v+'.createChoice('+jstr(o.text)+')';
+        });
+        deferChoices.push('  '+v+'.setChoices([\n'+parts.join(',\n')+'\n  ]);');
+      }
+    });
+
+    /* section navigation (page break sections only) */
+    if(i>0 && sec.next){
+      const v=varOf[sec.id];
+      if(sec.next==='SUBMIT') navs.push('  '+v+'.setGoToPage(FormApp.PageNavigationType.SUBMIT);');
+      else if(varOf[sec.next]) navs.push('  '+v+'.setGoToPage('+varOf[sec.next]+');');
+    }
+    L.push('');
+  });
+
+  if(deferChoices.length){
+    L.push('  // ===== 選択による分岐（全セクション定義後にまとめて設定）=====');
+    deferChoices.forEach(d=>L.push(d));
+    L.push('');
+  }
+  if(navs.length){
+    L.push('  // ===== セクション回答後の移動先 =====');
+    navs.forEach(n=>L.push(n));
+    L.push('');
+  }
+
+  L.push('  Logger.log("■ 編集用URL: " + form.getEditUrl());');
+  L.push('  Logger.log("■ 回答用URL: " + form.getPublishedUrl());');
+  L.push('}');
+  return L.join('\n');
+}
+
+/* =========================================================
+   Drawer / export / import
+========================================================= */
+const drawer=$('#drawer'), scrim=$('#scrim');
+
+function hlKeywords(escaped){
+  return escaped.replace(/\b(var|function|new|return)\b/g,'<span class="c-kw">$1</span>');
+}
+function highlightGAS(code){
+  return code.split('\n').map(line=>{
+    if(/^\s*\/\//.test(line)) return '<span class="c-com">'+esc(line)+'</span>';
+    let out='', last=0;
+    const re=/"(?:[^"\\]|\\.)*"/g; let m;
+    while((m=re.exec(line))){
+      out+=hlKeywords(esc(line.slice(last,m.index)));
+      out+='<span class="c-str">'+esc(m[0])+'</span>';
+      last=re.lastIndex;
+    }
+    out+=hlKeywords(esc(line.slice(last)));
+    return out;
+  }).join('\n');
+}
+
+function openDrawer(){
+  if(!state.sections.length){ toast('セクションがありません'); return; }
+  const code=generateGAS();
+  $('#codeOut').innerHTML=highlightGAS(code);
+  const nq=state.sections.reduce((a,s)=>a+s.questions.length,0);
+  const nb=state.sections.reduce((a,s)=>a+s.questions.filter(q=>QTYPES[q.type].branch&&q.options.some(o=>o.goto)).length,0);
+  $('#dStats').innerHTML='<span>セクション <b>'+state.sections.length+'</b></span><span>質問 <b>'+nq+'</b></span><span>分岐する質問 <b>'+nb+'</b></span>';
+  drawer.classList.add('open'); scrim.classList.add('open');
+}
+function closeDrawer(){ drawer.classList.remove('open'); scrim.classList.remove('open'); }
+$('#btnGen').addEventListener('click',openDrawer);
+$('#drawerClose').addEventListener('click',closeDrawer);
+$('#scrim').addEventListener('click',closeDrawer);
+
+$('#btnCopy').addEventListener('click',async()=>{
+  try{ await navigator.clipboard.writeText($('#codeOut').textContent); toast('コードをコピーしました ✓'); }
+  catch{ const r=document.createRange(); r.selectNode($('#codeOut')); getSelection().removeAllRanges(); getSelection().addRange(r); toast('選択しました。⌘/Ctrl+Cでコピー'); }
+});
+
+$('#btnExport').addEventListener('click',()=>{
+  const data=JSON.stringify(state,null,2);
+  const blob=new Blob([data],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=(state.title||'formflow')+'.json'; a.click();
+  URL.revokeObjectURL(url); toast('設計図を保存しました ✓');
+});
+$('#btnImport').addEventListener('click',()=>$('#fileInput').click());
+$('#fileInput').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const obj=migrateState(JSON.parse(r.result));
+      state=obj;
+      syncUidFrom(state);
+      $('#formTitle').value=state.title||''; $('#formDesc').value=state.description||'';
+      render(); pushHistory(); toast('読み込みました ✓');
+    }catch{ toast('読み込めませんでした（JSON形式を確認）'); }
+    e.target.value='';
+  };
+  r.readAsText(f);
+});
+
+/* =========================================================
+   Keyboard shortcuts
+========================================================= */
+$('#btnUndo').addEventListener('click',undo);
+$('#btnRedo').addEventListener('click',redo);
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    if(pvEl.classList.contains('open')) closePreview();
+    else if(drawer.classList.contains('open')) closeDrawer();
+    return;
+  }
+  const inField=e.target.matches && e.target.matches('input,textarea,select');
+  if((e.ctrlKey||e.metaKey) && !inField){
+    const k=e.key.toLowerCase();
+    if(k==='z' && !e.shiftKey){ e.preventDefault(); undo(); }
+    else if(k==='y' || (k==='z' && e.shiftKey)){ e.preventDefault(); redo(); }
+  }
+});
+
+/* =========================================================
+   Init
+========================================================= */
+(function init(){
+  let loaded=null;
+  try{
+    const raw=localStorage.getItem(AUTOSAVE_KEY);
+    if(raw) loaded=migrateState(JSON.parse(raw));
+  }catch(e){ loaded=null; }
+  state = (loaded && loaded.sections.length) ? loaded : sampleState();
+  syncUidFrom(state);
+  $('#formTitle').value=state.title||'';
+  $('#formDesc').value=state.description||'';
+  applyView();
+  render();
+  hist=[JSON.stringify(state)]; hi=0; updateHistBtns();
+})();
+window.addEventListener('resize',()=>drawWires());
+</script>
+</body>
+</html>
